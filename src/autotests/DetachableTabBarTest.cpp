@@ -3,9 +3,13 @@
 */
 
 #include "../widgets/DetachableTabBar.h"
+#include "../widgets/ViewContainer.h"
+#include "../widgets/ViewSplitter.h"
+#include "KonsoleSettings.h"
 
 #include <QSignalSpy>
 #include <QStyleOptionTab>
+#include <QTemporaryDir>
 #include <QTest>
 
 class TestTabBar : public Konsole::DetachableTabBar
@@ -17,8 +21,75 @@ public:
 class DetachableTabBarTest : public QObject
 {
     Q_OBJECT
+    QTemporaryDir _configDir;
 
 private Q_SLOTS:
+    void initTestCase()
+    {
+        QVERIFY(_configDir.isValid());
+        qputenv("XDG_CONFIG_HOME", _configDir.path().toUtf8());
+        QCoreApplication::setApplicationName(QStringLiteral("konsole"));
+    }
+
+    void resizeSidebar_data()
+    {
+        QTest::addColumn<int>("side");
+        QTest::newRow("left") << int(QTabWidget::West);
+        QTest::newRow("right") << int(QTabWidget::East);
+    }
+
+    void resizeSidebar()
+    {
+        QFETCH(int, side);
+        Konsole::KonsoleSettings::setTabBarPosition(side);
+        Konsole::KonsoleSettings::setTabBarVisibility(Konsole::KonsoleSettings::AlwaysShowTabBar);
+        Konsole::KonsoleSettings::setSideTabBarWidth(220);
+        Konsole::TabbedViewContainer container(nullptr, nullptr);
+        container.addTab(new Konsole::ViewSplitter, QStringLiteral("Terminal"));
+        container.resize(900, 400);
+        container.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&container));
+        auto *bar = container.findChild<Konsole::DetachableTabBar *>();
+        auto *handle = container.findChild<QWidget *>(QStringLiteral("sidebarResizeHandle"));
+        QVERIFY(bar);
+        QVERIFY(handle);
+        QTRY_COMPARE(bar->tabRect(0).width(), 220);
+        QVERIFY(handle->isVisible());
+        QCOMPARE(handle->height(), container.height());
+        const int direction = side == QTabWidget::West ? 1 : -1;
+        const QPoint press = handle->rect().center();
+        QTest::mousePress(handle, Qt::LeftButton, Qt::NoModifier, press);
+        QTest::mouseMove(handle, press + QPoint(direction * 100, 0));
+        QTest::mouseRelease(handle, Qt::LeftButton);
+        QTRY_COMPARE(bar->tabRect(0).width(), 320);
+        Konsole::KonsoleSettings::self()->load();
+        QCOMPARE(Konsole::KonsoleSettings::sideTabBarWidth(), 320);
+
+        // A new container restores the persisted width.
+        Konsole::TabbedViewContainer restored(nullptr, nullptr);
+        restored.addTab(new Konsole::ViewSplitter, QStringLiteral("Restored terminal"));
+        restored.resize(900, 400);
+        restored.show();
+        auto *restoredBar = restored.findChild<Konsole::DetachableTabBar *>();
+        QTRY_COMPARE(restoredBar->tabRect(0).width(), 320);
+
+        QTest::keyClick(handle, side == QTabWidget::West ? Qt::Key_Right : Qt::Key_Left);
+        QTRY_COMPARE(bar->tabRect(0).width(), 330);
+        container.resize(500, 400);
+        QTRY_VERIFY(bar->tabRect(0).width() <= container.width() / 2);
+        container.resize(900, 400);
+        QTRY_COMPARE(bar->tabRect(0).width(), 330);
+        QTest::mouseDClick(handle, Qt::LeftButton);
+        QTRY_COMPARE(Konsole::KonsoleSettings::sideTabBarWidth(), 0);
+        QTRY_VERIFY(bar->width() < 220);
+        bar->hide();
+        QTRY_VERIFY(!handle->isVisible());
+        bar->show();
+        QTRY_VERIFY(handle->isVisible());
+        container.setTabPosition(QTabWidget::North);
+        QTRY_VERIFY(!handle->isVisible());
+    }
+
     void selectionPalette_data()
     {
         QTest::addColumn<bool>("dark");
@@ -55,7 +126,7 @@ private Q_SLOTS:
             bar.setPalette(palette);
             const QImage image = bar.grab().toImage().scaled(bar.size());
             const QRect rect = bar.tabRect(selected);
-            const QPoint marker(rtl ? rect.right() - 1 : rect.left() + 1, rect.center().y());
+            const QPoint marker(rect.left() + 1, rect.center().y());
             QCOMPARE(image.pixelColor(marker), palette.color(QPalette::Highlight));
             const QColor background = image.pixelColor(rect.center().x(), rect.top() + 3);
             QVERIFY(background != palette.color(QPalette::Window));

@@ -70,8 +70,11 @@ public:
                 painter->setOpacity(opacity * 0.2);
                 painter->fillRect(tab->rect, selected.palette.highlight());
                 painter->setOpacity(opacity);
-                const QRect marker(tab->rect.topLeft(), QSize(3, tab->rect.height()));
-                painter->fillRect(visualRect(tab->direction, tab->rect, marker), selected.palette.highlight());
+                // Keep the selection marker on the outer edge, away from the
+                // resize handle between the sidebar and the terminal.
+                const bool rightSidebar = bar->shape() == QTabBar::RoundedEast || bar->shape() == QTabBar::TriangularEast;
+                const QRect marker(rightSidebar ? tab->rect.right() - 2 : tab->rect.left(), tab->rect.top(), 3, tab->rect.height());
+                painter->fillRect(marker, selected.palette.highlight());
                 QProxyStyle::drawControl(CE_TabBarTabLabel, &selected, painter, widget);
             } else {
                 QProxyStyle::drawControl(element, option, painter, widget);
@@ -112,6 +115,18 @@ DetachableTabBar::DetachableTabBar(QWidget *parent)
     KAcceleratorManager::setNoAccel(this);
 }
 
+void DetachableTabBar::setSidebarWidth(int width)
+{
+    width = qMax(0, width);
+    if (_sidebarWidth == width) {
+        return;
+    }
+    _sidebarWidth = width;
+    // Invalidate QTabBar's cached tab sizes and notify QTabWidget's layout.
+    QEvent layoutChange(QEvent::StyleChange);
+    QTabBar::changeEvent(&layoutChange);
+}
+
 QSize DetachableTabBar::tabSizeHint(int index) const
 {
     if (!isVertical(shape())) {
@@ -136,7 +151,11 @@ QSize DetachableTabBar::tabSizeHint(int index) const
     // Keep long session titles from consuming the terminal's width. Apply the
     // style afterwards so explicit stylesheet dimensions are still respected.
     size.setWidth(qMin(size.width(), fontMetrics().averageCharWidth() * 30));
-    return style()->sizeFromContents(QStyle::CT_TabBarTab, &option, size, this);
+    size = style()->sizeFromContents(QStyle::CT_TabBarTab, &option, size, this);
+    if (_sidebarWidth > 0) {
+        size.setWidth(_sidebarWidth);
+    }
+    return size;
 }
 
 void DetachableTabBar::initStyleOption(QStyleOptionTab *option, int index) const

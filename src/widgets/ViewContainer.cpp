@@ -15,6 +15,8 @@
 #include <QKeyEvent>
 #include <QLabel>
 #include <QMenu>
+#include <QMouseEvent>
+#include <QStylePainter>
 #include <QTabBar>
 
 // KF
@@ -43,6 +45,30 @@
 
 using namespace Konsole;
 
+namespace
+{
+class SidebarResizeHandle : public QWidget
+{
+public:
+    using QWidget::QWidget;
+
+protected:
+    void paintEvent(QPaintEvent *) override
+    {
+        QStylePainter painter(this);
+        QStyleOption option;
+        option.initFrom(this);
+        option.state |= QStyle::State_Horizontal;
+        painter.drawControl(QStyle::CE_Splitter, option);
+        if (hasFocus()) {
+            QStyleOptionFocusRect focus;
+            focus.initFrom(this);
+            painter.drawPrimitive(QStyle::PE_FrameFocusRect, focus);
+        }
+    }
+};
+}
+
 static QString containerBadgeColorStyle(const QColor &color)
 {
     return QStringLiteral("background-color: %1; border: 1px solid palette(mid); border-radius: 5px;").arg(color.name(QColor::HexRgb));
@@ -66,6 +92,7 @@ static ViewSplitter *topLevelSplitterForDisplay(TerminalDisplay *display)
 
 TabbedViewContainer::TabbedViewContainer(ViewManager *connectedViewManager, QWidget *parent)
     : QTabWidget(parent)
+    , _sidebarResizeHandle(new SidebarResizeHandle(this))
     , _connectedViewManager(connectedViewManager)
     , _newTabButton(new QToolButton(this))
     , _searchTabsButton(new QToolButton(this))
@@ -77,6 +104,14 @@ TabbedViewContainer::TabbedViewContainer(ViewManager *connectedViewManager, QWid
 
     auto tabBarWidget = new DetachableTabBar(this);
     setTabBar(tabBarWidget);
+    tabBarWidget->installEventFilter(this);
+    _sidebarResizeHandle->setObjectName(QStringLiteral("sidebarResizeHandle"));
+    _sidebarResizeHandle->setCursor(Qt::SplitHCursor);
+    _sidebarResizeHandle->setFocusPolicy(Qt::StrongFocus);
+    _sidebarResizeHandle->setAccessibleName(i18nc("@info:accessibility", "Resize tab bar"));
+    _sidebarResizeHandle->setToolTip(i18nc("@info:tooltip", "Drag to resize the tab bar. Double-click to restore automatic width."));
+    _sidebarResizeHandle->installEventFilter(this);
+    _sidebarResizeHandle->hide();
     setDocumentMode(true);
     setMovable(true);
     tabBar()->setChangeCurrentOnDrag(true);
@@ -270,6 +305,7 @@ void TabbedViewContainer::konsoleConfigChanged()
     }
 
     setTabPosition((QTabWidget::TabPosition)KonsoleSettings::tabBarPosition());
+    _sidebarWidth = KonsoleSettings::sideTabBarWidth();
 
     setCornerWidget(KonsoleSettings::newTabButton() ? _newTabButton : nullptr, Qt::TopLeftCorner);
     _newTabButton->setVisible(KonsoleSettings::newTabButton());
@@ -298,6 +334,7 @@ void TabbedViewContainer::konsoleConfigChanged()
     tabBar()->setTabsClosable(KonsoleSettings::closeTabButton() == 0);
 
     tabBar()->setExpanding(KonsoleSettings::expandTabWidth() && tabPosition() != QTabWidget::West && tabPosition() != QTabWidget::East);
+    updateSidebarGeometry();
     tabBar()->update();
 
     for (int i = 0; i < count(); ++i) {
@@ -371,6 +408,88 @@ void TabbedViewContainer::terminalDisplayDropped(TerminalDisplay *terminalDispla
         connectedViewManager()->attachView(terminalDisplay, terminalSession);
         connectTerminalDisplay(terminalDisplay);
     }
+}
+
+void TabbedViewContainer::updateSidebarGeometry()
+{
+    const bool vertical = tabPosition() == West || tabPosition() == East;
+    auto *bar = static_cast<DetachableTabBar *>(tabBar());
+    bar->setSidebarWidth(_sidebarWidth > 0 ? qBound(80, _sidebarWidth, qMax(80, width() / 2)) : 0);
+    _sidebarResizeHandle->setVisible(vertical && bar->isVisible() && bar->count() > 0);
+    if (vertical) {
+        const int handleWidth = qMax(6, style()->pixelMetric(QStyle::PM_SplitterWidth, nullptr, this));
+        const int x = tabPosition() == West ? bar->geometry().right() - handleWidth + 1 : bar->geometry().left();
+        _sidebarResizeHandle->setGeometry(x, 0, handleWidth, height());
+        _sidebarResizeHandle->raise();
+    }
+}
+
+void TabbedViewContainer::resizeSidebar(int width, bool save)
+{
+    _sidebarWidth = width == 0 ? 0 : qBound(80, width, qMax(80, this->width() / 2));
+    updateSidebarGeometry();
+    if (save) {
+        KonsoleSettings::setSideTabBarWidth(_sidebarWidth);
+        KonsoleSettings::self()->save();
+    }
+}
+
+void TabbedViewContainer::resizeEvent(QResizeEvent *event)
+{
+    QTabWidget::resizeEvent(event);
+    updateSidebarGeometry();
+}
+
+bool TabbedViewContainer::eventFilter(QObject *object, QEvent *event)
+{
+    if (object == tabBar()
+        && (event->type() == QEvent::Resize || event->type() == QEvent::Move || event->type() == QEvent::Show || event->type() == QEvent::Hide)) {
+        updateSidebarGeometry();
+    } else if (object == _sidebarResizeHandle) {
+        const int direction = tabPosition() == West ? 1 : -1;
+        if (event->type() == QEvent::MouseButtonPress) {
+            const auto *mouse = static_cast<QMouseEvent *>(event);
+            if (mouse->button() == Qt::LeftButton) {
+                _resizingSidebar = true;
+                _sidebarDragStart = mouse->globalPosition().toPoint().x();
+                _sidebarDragWidth = tabBar()->tabRect(currentIndex()).width();
+                _sidebarResizeHandle->setFocus(Qt::MouseFocusReason);
+                return true;
+            }
+        } else if (event->type() == QEvent::MouseMove && _resizingSidebar) {
+            const auto *mouse = static_cast<QMouseEvent *>(event);
+            resizeSidebar(qMax(1, _sidebarDragWidth + direction * (mouse->globalPosition().toPoint().x() - _sidebarDragStart)), false);
+            return true;
+        } else if (event->type() == QEvent::MouseButtonRelease && _resizingSidebar) {
+            if (static_cast<QMouseEvent *>(event)->button() == Qt::LeftButton) {
+                _resizingSidebar = false;
+                resizeSidebar(_sidebarWidth, true);
+                return true;
+            }
+        } else if (event->type() == QEvent::MouseButtonDblClick) {
+            if (static_cast<QMouseEvent *>(event)->button() == Qt::LeftButton) {
+                _resizingSidebar = false;
+                resizeSidebar(0, true);
+                return true;
+            }
+        } else if (event->type() == QEvent::KeyRelease) {
+            const int key = static_cast<QKeyEvent *>(event)->key();
+            if (key == Qt::Key_Left || key == Qt::Key_Right || key == Qt::Key_Home) {
+                return true;
+            }
+        } else if (event->type() == QEvent::KeyPress) {
+            const int key = static_cast<QKeyEvent *>(event)->key();
+            if (key == Qt::Key_Left || key == Qt::Key_Right) {
+                resizeSidebar(tabBar()->tabRect(currentIndex()).width() + direction * (key == Qt::Key_Right ? 10 : -10), true);
+                return true;
+            }
+            if (key == Qt::Key_Home) {
+                resizeSidebar(0, true);
+                return true;
+            }
+        }
+    }
+    return QTabWidget::eventFilter(object, event);
 }
 
 QSize TabbedViewContainer::sizeHint() const
@@ -1057,7 +1176,6 @@ void TabbedViewContainer::toggleMaximizeCurrentTerminal()
 
     activeViewSplitter()->toggleMaximizeCurrentTerminal();
 }
-
 
 void TabbedViewContainer::toggleZoomMaximizeCurrentTerminal()
 {

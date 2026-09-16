@@ -227,6 +227,8 @@ protected:
     void closeTerminalTab(int idx);
 
     void keyReleaseEvent(QKeyEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
+    bool eventFilter(QObject *object, QEvent *event) override;
 private Q_SLOTS:
     void viewDestroyed(QObject *view);
     void konsoleConfigChanged();
@@ -235,6 +237,8 @@ private Q_SLOTS:
 
 private:
     void forgetView();
+    void updateSidebarGeometry();
+    void resizeSidebar(int width, bool save);
     void ensureContainerBadge(TerminalDisplay *display);
     void removeContainerBadge(TerminalDisplay *display);
     void updateContainerBadgeForDisplay(TerminalDisplay *display);
@@ -260,6 +264,11 @@ private:
     };
 
     bool _stylesheetSet = false;
+    QWidget *_sidebarResizeHandle;
+    int _sidebarWidth = 0;
+    int _sidebarDragStart = 0;
+    int _sidebarDragWidth = 0;
+    bool _resizingSidebar = false;
 
     QHash<const QWidget *, TabIconState> _tabIconState;
     ViewManager *_connectedViewManager;

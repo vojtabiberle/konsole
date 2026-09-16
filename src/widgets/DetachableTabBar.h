@@ -43,6 +43,7 @@ public:
     void setActivityColor(int idx, const QColor &color);
 
     void setProgress(int idx, const std::optional<int> &progress);
+    void setSidebarWidth(int width);
 
 Q_SIGNALS:
     void detachTab(int index);
@@ -69,6 +70,7 @@ private:
     QList<TabbedViewContainer *> _containers;
     int tabId;
     QColor _activityColor;
+    int _sidebarWidth = 0;
 };
 }
 
