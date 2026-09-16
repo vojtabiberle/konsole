@@ -41,6 +41,10 @@ ecm_add_tests(
     LINK_LIBRARIES konsoleprivate Qt::Test ${KONSOLE_TEST_LIBS}
 )
 
+# Exercise widget rendering and input without requiring an interactive desktop.
+# In particular, Windows CI cannot expose native windows.
+set_tests_properties(DetachableTabBarTest PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
 ecm_add_test(
     ProcessInfoTest.cpp
     LINK_LIBRARIES konsoleprivate KF6::CoreAddons Qt::Test ${KONSOLE_TEST_LIBS}
