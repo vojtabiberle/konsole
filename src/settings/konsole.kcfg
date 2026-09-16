@@ -155,6 +155,11 @@
       </choices>
       <default>Top</default>
     </entry>
+    <entry name="SideTabBarWidth" type="Int">
+      <label>Width of the side tab bar, or zero for automatic sizing</label>
+      <default>0</default>
+      <min>0</min>
+    </entry>
     <entry name="TabBarStyleSheet" type="String">
       <label>Control the visual style of the tab bar</label>
       <default>QTabBar::tab { min-width: 2em ; max-width: 25em }</default>

@@ -1337,6 +1337,10 @@ Notifications...</guimenuitem></menuchoice></term>
         <para>
             When the tab bar is placed on the left or right, tabs are stacked vertically
             with horizontal titles. Long titles are shortened to keep room for the terminal.
+            Drag the edge between the tab bar and the terminal to adjust its width.
+            The width is remembered; double-click the edge to restore automatic sizing.
+            When the edge has keyboard focus, use the arrow keys to resize it or
+            <keycap>Home</keycap> to restore automatic sizing.
             Expanding individual tab widths applies only to the top and bottom positions.
         </para>
         <para>
