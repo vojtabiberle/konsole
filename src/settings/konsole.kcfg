@@ -160,6 +160,15 @@
       <default>0</default>
       <min>0</min>
     </entry>
+    <entry name="SideTabTextAlignment" type="Enum">
+      <label>Text alignment in side tabs</label>
+      <choices>
+        <choice name="AlignLeft" />
+        <choice name="AlignCenter" />
+        <choice name="AlignRight" />
+      </choices>
+      <default>AlignCenter</default>
+    </entry>
     <entry name="TabBarStyleSheet" type="String">
       <label>Control the visual style of the tab bar</label>
       <default>QTabBar::tab { min-width: 2em ; max-width: 25em }</default>

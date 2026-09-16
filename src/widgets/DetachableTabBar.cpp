@@ -17,6 +17,7 @@
 #include <QColor>
 #include <QPainter>
 #include <QProxyStyle>
+#include <QScopedValueRollback>
 #include <QStyleFactory>
 #include <QStyleOptionTab>
 
@@ -54,6 +55,7 @@ public:
     {
         const auto *bar = qobject_cast<const QTabBar *>(widget);
         if (element == CE_TabBarTab && bar && isVertical(bar->shape())) {
+            QScopedValueRollback<bool> labelAlignment(_alignSideTabText, true);
             // Horizontal tab styles may paint into the page below the tab.
             // In a sidebar that area belongs to the next row instead.
             painter->save();
@@ -85,6 +87,25 @@ public:
         QProxyStyle::drawControl(element, option, painter, widget);
     }
 
+    void drawItemText(QPainter *painter,
+                      const QRect &rect,
+                      int flags,
+                      const QPalette &palette,
+                      bool enabled,
+                      const QString &text,
+                      QPalette::ColorRole textRole = QPalette::NoRole) const override
+    {
+        if (_alignSideTabText) {
+            const auto alignment = KonsoleSettings::sideTabTextAlignment();
+            flags &= ~Qt::AlignHorizontal_Mask;
+            flags |= Qt::AlignAbsolute;
+            flags |= alignment == KonsoleSettings::EnumSideTabTextAlignment::AlignLeft ? Qt::AlignLeft
+                : alignment == KonsoleSettings::EnumSideTabTextAlignment::AlignRight   ? Qt::AlignRight
+                                                                                       : Qt::AlignHCenter;
+        }
+        QProxyStyle::drawItemText(painter, rect, flags, palette, enabled, text, textRole);
+    }
+
     QRect subElementRect(SubElement element, const QStyleOption *option, const QWidget *widget) const override
     {
         const auto *bar = qobject_cast<const QTabBar *>(widget);
@@ -97,6 +118,9 @@ public:
         }
         return QProxyStyle::subElementRect(element, option, widget);
     }
+
+private:
+    mutable bool _alignSideTabText = false;
 };
 }
 

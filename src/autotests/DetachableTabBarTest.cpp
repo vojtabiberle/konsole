@@ -31,6 +31,62 @@ private Q_SLOTS:
         QCoreApplication::setApplicationName(QStringLiteral("konsole"));
     }
 
+    void textAlignment_data()
+    {
+        QTest::addColumn<bool>("right");
+        QTest::addColumn<bool>("rtl");
+        QTest::addColumn<bool>("selected");
+        for (bool right : {false, true}) {
+            for (bool rtl : {false, true}) {
+                for (bool selected : {false, true}) {
+                    QTest::newRow(qPrintable(QStringLiteral("%1-%2-%3").arg(right).arg(rtl).arg(selected))) << right << rtl << selected;
+                }
+            }
+        }
+    }
+
+    void textAlignment()
+    {
+        QFETCH(bool, right);
+        QFETCH(bool, rtl);
+        QFETCH(bool, selected);
+        TestTabBar bar;
+        bar.setShape(right ? QTabBar::RoundedEast : QTabBar::RoundedWest);
+        bar.setLayoutDirection(rtl ? Qt::RightToLeft : Qt::LeftToRight);
+        bar.setSidebarWidth(300);
+        bar.addTab(QStringLiteral(""));
+        bar.addTab(QStringLiteral("Other"));
+        bar.setCurrentIndex(selected ? 0 : 1);
+        bar.resize(300, 100);
+        bar.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&bar));
+        QList<QRect> bounds;
+        for (int alignment = 0; alignment < 3; ++alignment) {
+            Konsole::KonsoleSettings::setSideTabTextAlignment(alignment);
+            bar.setTabText(0, QString());
+            const QImage empty = bar.grab().toImage();
+            bar.setTabText(0, QStringLiteral("Terminal"));
+            const QImage label = bar.grab().toImage();
+            const qreal scale = label.devicePixelRatio();
+            const QRect row = QRectF(bar.tabRect(0).x() * scale, bar.tabRect(0).y() * scale, bar.tabRect(0).width() * scale, bar.tabRect(0).height() * scale)
+                                  .toRect()
+                                  .intersected(label.rect());
+            QRect ink;
+            for (int y = row.top(); y <= row.bottom(); ++y) {
+                for (int x = row.left(); x <= row.right(); ++x) {
+                    if (empty.pixel(x, y) != label.pixel(x, y)) {
+                        ink |= QRect(x, y, 1, 1);
+                    }
+                }
+            }
+            QVERIFY(!ink.isEmpty());
+            bounds.append(ink);
+        }
+        QVERIFY(bounds[0].right() < bounds[1].left());
+        QVERIFY(bounds[1].right() < bounds[2].left());
+        Konsole::KonsoleSettings::setSideTabTextAlignment(Konsole::KonsoleSettings::EnumSideTabTextAlignment::AlignCenter);
+    }
+
     void resizeSidebar_data()
     {
         QTest::addColumn<int>("side");

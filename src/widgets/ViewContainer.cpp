@@ -306,6 +306,7 @@ void TabbedViewContainer::konsoleConfigChanged()
 
     setTabPosition((QTabWidget::TabPosition)KonsoleSettings::tabBarPosition());
     _sidebarWidth = KonsoleSettings::sideTabBarWidth();
+    tabBar()->update();
 
     setCornerWidget(KonsoleSettings::newTabButton() ? _newTabButton : nullptr, Qt::TopLeftCorner);
     _newTabButton->setVisible(KonsoleSettings::newTabButton());

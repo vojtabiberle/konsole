@@ -32,6 +32,16 @@ TabBarSettings::TabBarSettings(QWidget *parent)
     };
     connect(kcfg_TabBarUseUserStyleSheet, &QAbstractButton::toggled, this, updateStyleSheetFileEnable);
     connect(AlwaysHideTabBar, &QAbstractButton::toggled, this, updateStyleSheetFileEnable);
+
+    const auto updateTextAlignmentEnable = [this]() {
+        const bool enabled = (Left->isChecked() || Right->isChecked()) && !AlwaysHideTabBar->isChecked();
+        sideTabTextAlignmentLabel->setEnabled(enabled);
+        kcfg_SideTabTextAlignment->setEnabled(enabled);
+    };
+    connect(Left, &QAbstractButton::toggled, this, updateTextAlignmentEnable);
+    connect(Right, &QAbstractButton::toggled, this, updateTextAlignmentEnable);
+    connect(AlwaysHideTabBar, &QAbstractButton::toggled, this, updateTextAlignmentEnable);
+    updateTextAlignmentEnable();
 }
 
 TabBarSettings::~TabBarSettings() = default;
