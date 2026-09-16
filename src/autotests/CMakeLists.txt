@@ -44,6 +44,10 @@ ecm_add_tests(
 # Exercise widget rendering and input without requiring an interactive desktop.
 # In particular, Windows CI cannot expose native windows.
 set_tests_properties(DetachableTabBarTest PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+if(WIN32)
+    # The offscreen plugin does not use the native Windows font database.
+    set_property(TEST DetachableTabBarTest APPEND PROPERTY ENVIRONMENT "QT_QPA_FONTDIR=$ENV{WINDIR}/Fonts")
+endif()
 
 ecm_add_test(
     ProcessInfoTest.cpp
