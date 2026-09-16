@@ -218,6 +218,11 @@ private Q_SLOTS:
         bar.addTab(icon, QStringLiteral("Second terminal"));
         const bool vertical =
             shape == QTabBar::RoundedWest || shape == QTabBar::RoundedEast || shape == QTabBar::TriangularWest || shape == QTabBar::TriangularEast;
+        // This checks unelided label/button layout. Automatic width is capped
+        // and may legitimately elide these titles with other fonts or styles.
+        if (vertical) {
+            bar.setSidebarWidth(bar.fontMetrics().horizontalAdvance(bar.tabText(1)) * 3);
+        }
         bar.resize(vertical ? QSize(bar.sizeHint().width(), 400) : QSize(600, bar.sizeHint().height()));
         bar.show();
         QVERIFY(QTest::qWaitForWindowExposed(&bar));
