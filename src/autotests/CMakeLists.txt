@@ -31,6 +31,7 @@ ecm_add_tests(
 )
 
 ecm_add_tests(
+    DetachableTabBarTest.cpp
     HistoryTest.cpp
     HotSpotFilterTest.cpp
     ScreenTest.cpp

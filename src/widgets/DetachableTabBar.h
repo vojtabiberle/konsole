@@ -7,6 +7,8 @@
 #ifndef DETACHABLETABBAR_H
 #define DETACHABLETABBAR_H
 
+#include "konsoleprivate_export.h"
+
 #include <QCursor>
 #include <QTabBar>
 
@@ -24,7 +26,7 @@ struct DetachableTabData {
     std::optional<int> progress;
 };
 
-class DetachableTabBar : public QTabBar
+class KONSOLEPRIVATE_EXPORT DetachableTabBar : public QTabBar
 {
     Q_OBJECT
 public:
@@ -49,6 +51,8 @@ Q_SIGNALS:
     void newTabRequest();
 
 protected:
+    QSize tabSizeHint(int index) const override;
+    void initStyleOption(QStyleOptionTab *option, int index) const override;
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;

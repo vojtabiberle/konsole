@@ -1335,6 +1335,11 @@ Notifications...</guimenuitem></menuchoice></term>
             and closing of tabs with a &MMB; click.
         </para>
         <para>
+            When the tab bar is placed on the left or right, tabs are stacked vertically
+            with horizontal titles. Long titles are shortened to keep room for the terminal.
+            Expanding individual tab widths applies only to the top and bottom positions.
+        </para>
+        <para>
             It is also possible to configure visibility of the split headers (<guilabel>When needed</guilabel> (default), <guilabel>Always</guilabel>, or <guilabel>Never</guilabel>) and define the drag handle size for splits (<guilabel>Small</guilabel> (default), <guilabel>Medium</guilabel>, or <guilabel>Large</guilabel>) using the <guilabel>Splits</guilabel> tab of this configuration page.
         </para>
     </listitem>
