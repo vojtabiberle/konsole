@@ -297,7 +297,7 @@ void TabbedViewContainer::konsoleConfigChanged()
 
     tabBar()->setTabsClosable(KonsoleSettings::closeTabButton() == 0);
 
-    tabBar()->setExpanding(KonsoleSettings::expandTabWidth());
+    tabBar()->setExpanding(KonsoleSettings::expandTabWidth() && tabPosition() != QTabWidget::West && tabPosition() != QTabWidget::East);
     tabBar()->update();
 
     for (int i = 0; i < count(); ++i) {
@@ -378,6 +378,10 @@ QSize TabbedViewContainer::sizeHint() const
     // QTabWidget::sizeHint() contains some margins added by widgets
     // style, which were making the initial window size too big.
     const auto tabsSize = tabBar()->sizeHint();
+    if (tabPosition() == QTabWidget::West || tabPosition() == QTabWidget::East) {
+        const QSize terminalSize = currentWidget() != nullptr ? currentWidget()->sizeHint() : QSize(0, 0);
+        return tabBar()->isVisibleTo(this) ? QSize(terminalSize.width() + tabsSize.width(), qMax(terminalSize.height(), tabsSize.height())) : terminalSize;
+    }
     const auto *leftWidget = cornerWidget(Qt::TopLeftCorner);
     const auto *rightWidget = cornerWidget(Qt::TopRightCorner);
     const auto leftSize = leftWidget != nullptr ? leftWidget->sizeHint() : QSize(0, 0);

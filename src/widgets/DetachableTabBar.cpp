@@ -16,9 +16,70 @@
 
 #include <QColor>
 #include <QPainter>
+#include <QProxyStyle>
+#include <QStyleFactory>
+#include <QStyleOptionTab>
 
 namespace Konsole
 {
+namespace
+{
+bool isVertical(QTabBar::Shape shape)
+{
+    return shape == QTabBar::RoundedWest || shape == QTabBar::RoundedEast || shape == QTabBar::TriangularWest || shape == QTabBar::TriangularEast;
+}
+
+class TabBarStyle : public QProxyStyle
+{
+public:
+    TabBarStyle()
+        : QProxyStyle(qApp->style()->objectName())
+    {
+        qApp->installEventFilter(this);
+    }
+
+    bool eventFilter(QObject *object, QEvent *event) override
+    {
+        if (event->type() == QEvent::StyleChange && baseStyle()->objectName() != qApp->style()->objectName()) {
+            if (auto *newStyle = QStyleFactory::create(qApp->style()->objectName())) {
+                setBaseStyle(newStyle);
+                QEvent styleChange(QEvent::StyleChange);
+                QApplication::sendEvent(parent(), &styleChange);
+            }
+        }
+        return QProxyStyle::eventFilter(object, event);
+    }
+
+    void drawControl(ControlElement element, const QStyleOption *option, QPainter *painter, const QWidget *widget) const override
+    {
+        const auto *bar = qobject_cast<const QTabBar *>(widget);
+        if (element == CE_TabBarTab && bar && isVertical(bar->shape())) {
+            // Horizontal tab styles may paint into the page below the tab.
+            // In a sidebar that area belongs to the next row instead.
+            painter->save();
+            painter->setClipRect(option->rect, Qt::IntersectClip);
+            QProxyStyle::drawControl(element, option, painter, widget);
+            painter->restore();
+            return;
+        }
+        QProxyStyle::drawControl(element, option, painter, widget);
+    }
+
+    QRect subElementRect(SubElement element, const QStyleOption *option, const QWidget *widget) const override
+    {
+        const auto *bar = qobject_cast<const QTabBar *>(widget);
+        const auto *tab = qstyleoption_cast<const QStyleOptionTab *>(option);
+        if (bar && isVertical(bar->shape()) && tab && (element == SE_TabBarTabLeftButton || element == SE_TabBarTabRightButton)) {
+            // Some styles assume horizontal tabs always start at y == 0.
+            QStyleOptionTab localOption(*tab);
+            localOption.rect.moveTopLeft(QPoint());
+            return QProxyStyle::subElementRect(element, &localOption, widget).translated(tab->rect.topLeft());
+        }
+        return QProxyStyle::subElementRect(element, option, widget);
+    }
+};
+}
+
 DetachableTabBar::DetachableTabBar(QWidget *parent)
     : QTabBar(parent)
     , dragType(DragType::NONE)
@@ -26,9 +87,53 @@ DetachableTabBar::DetachableTabBar(QWidget *parent)
     , tabId(-1)
     , _activityColor(QColor::Invalid)
 {
+    auto *tabStyle = new TabBarStyle;
+    tabStyle->setParent(this);
+    setStyle(tabStyle);
     setAcceptDrops(true);
     setElideMode(Qt::TextElideMode::ElideLeft);
     KAcceleratorManager::setNoAccel(this);
+}
+
+QSize DetachableTabBar::tabSizeHint(int index) const
+{
+    if (!isVertical(shape())) {
+        return QTabBar::tabSizeHint(index);
+    }
+
+    QStyleOptionTab option;
+    initStyleOption(&option, index);
+    QSize size = fontMetrics().size(Qt::TextShowMnemonic, tabText(index));
+    if (!option.icon.isNull()) {
+        size.rwidth() += option.iconSize.width() + 4;
+        size.setHeight(qMax(size.height(), option.iconSize.height()));
+    }
+    for (const QSize &buttonSize : {option.leftButtonSize, option.rightButtonSize}) {
+        if (!buttonSize.isEmpty()) {
+            size.rwidth() += buttonSize.width() + 4;
+            size.setHeight(qMax(size.height(), buttonSize.height()));
+        }
+    }
+    size.rwidth() += style()->pixelMetric(QStyle::PM_TabBarTabHSpace, &option, this);
+    size.rheight() += style()->pixelMetric(QStyle::PM_TabBarTabVSpace, &option, this);
+    // Keep long session titles from consuming the terminal's width. Apply the
+    // style afterwards so explicit stylesheet dimensions are still respected.
+    size.setWidth(qMin(size.width(), fontMetrics().averageCharWidth() * 30));
+    return style()->sizeFromContents(QStyle::CT_TabBarTab, &option, size, this);
+}
+
+void DetachableTabBar::initStyleOption(QStyleOptionTab *option, int index) const
+{
+    QTabBar::initStyleOption(option, index);
+    if (option == nullptr || !isVertical(shape())) {
+        return;
+    }
+
+    // Keep QTabBar's vertical layout, scrolling and dragging, but let the style
+    // lay out labels, icons and tab buttons as a horizontal row.
+    option->shape = shape() == TriangularWest || shape() == TriangularEast ? TriangularNorth : RoundedNorth;
+    const QRect textRect = style()->subElementRect(QStyle::SE_TabBarTabText, option, this);
+    option->text = fontMetrics().elidedText(tabText(index), elideMode(), textRect.width(), Qt::TextShowMnemonic);
 }
 
 void DetachableTabBar::setColor(int idx, const QColor &color)
@@ -210,7 +315,10 @@ void DetachableTabBar::paintEvent(QPaintEvent *event)
 
         painter.setBrush(color);
         QRect tRect = tabRect(tabIndex);
-        tRect.setTop(painter.fontMetrics().height() + 6); // Color bar top position consider a height the font and fixed spacing of 6px
+        if (!isTabVisible(tabIndex)) {
+            continue;
+        }
+        tRect.setTop(tRect.top() + painter.fontMetrics().height() + 6); // Position relative to each tab, including vertically stacked tabs.
         tRect.setHeight(4);
         tRect.setLeft(tRect.left() + 6);
         tRect.setWidth(tRect.width() - 6);
