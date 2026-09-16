@@ -19,6 +19,52 @@ class DetachableTabBarTest : public QObject
     Q_OBJECT
 
 private Q_SLOTS:
+    void selectionPalette_data()
+    {
+        QTest::addColumn<bool>("dark");
+        QTest::addColumn<bool>("rtl");
+        QTest::newRow("light-ltr") << false << false;
+        QTest::newRow("dark-ltr") << true << false;
+        QTest::newRow("light-rtl") << false << true;
+        QTest::newRow("dark-rtl") << true << true;
+    }
+
+    void selectionPalette()
+    {
+        QFETCH(bool, dark);
+        QFETCH(bool, rtl);
+        TestTabBar bar;
+        bar.setShape(QTabBar::RoundedWest);
+        bar.setLayoutDirection(rtl ? Qt::RightToLeft : Qt::LeftToRight);
+        bar.setExpanding(false);
+        bar.addTab(QStringLiteral("First terminal"));
+        bar.addTab(QStringLiteral("Second terminal"));
+        QPalette palette = bar.palette();
+        palette.setColor(QPalette::Window, dark ? QColor(35, 38, 41) : QColor(239, 240, 241));
+        palette.setColor(QPalette::WindowText, dark ? Qt::white : Qt::black);
+        palette.setColor(QPalette::Highlight, QColor(61, 174, 233));
+        bar.setPalette(palette);
+        bar.resize(bar.sizeHint());
+        bar.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&bar));
+
+        for (int selected = 0; selected < 2; ++selected) {
+            bar.setCurrentIndex(selected);
+            // Changing the palette must affect an already visible tab bar.
+            palette.setColor(QPalette::Highlight, selected == 0 ? QColor(61, 174, 233) : QColor(180, 95, 205));
+            bar.setPalette(palette);
+            const QImage image = bar.grab().toImage().scaled(bar.size());
+            const QRect rect = bar.tabRect(selected);
+            const QPoint marker(rtl ? rect.right() - 1 : rect.left() + 1, rect.center().y());
+            QCOMPARE(image.pixelColor(marker), palette.color(QPalette::Highlight));
+            const QColor background = image.pixelColor(rect.center().x(), rect.top() + 3);
+            QVERIFY(background != palette.color(QPalette::Window));
+            QVERIFY(background != palette.color(QPalette::Highlight));
+            const QRect other = bar.tabRect(1 - selected);
+            QVERIFY(image.pixelColor(marker.x(), other.center().y()) != palette.color(QPalette::Highlight));
+        }
+    }
+
     void layout_data()
     {
         QTest::addColumn<int>("shape");

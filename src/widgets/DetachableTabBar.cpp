@@ -58,7 +58,24 @@ public:
             // In a sidebar that area belongs to the next row instead.
             painter->save();
             painter->setClipRect(option->rect, Qt::IntersectClip);
-            QProxyStyle::drawControl(element, option, painter, widget);
+            const auto *tab = qstyleoption_cast<const QStyleOptionTab *>(option);
+            if (tab && (tab->state & State_Selected)) {
+                // Use the window's theme colors, independently of activity text
+                // colors. A side marker distinguishes selection from progress.
+                QStyleOptionTab selected(*tab);
+                selected.palette = bar->palette();
+                selected.palette.setCurrentColorGroup(tab->palette.currentColorGroup());
+                painter->fillRect(tab->rect, selected.palette.window());
+                const qreal opacity = painter->opacity();
+                painter->setOpacity(opacity * 0.2);
+                painter->fillRect(tab->rect, selected.palette.highlight());
+                painter->setOpacity(opacity);
+                const QRect marker(tab->rect.topLeft(), QSize(3, tab->rect.height()));
+                painter->fillRect(visualRect(tab->direction, tab->rect, marker), selected.palette.highlight());
+                QProxyStyle::drawControl(CE_TabBarTabLabel, &selected, painter, widget);
+            } else {
+                QProxyStyle::drawControl(element, option, painter, widget);
+            }
             painter->restore();
             return;
         }
